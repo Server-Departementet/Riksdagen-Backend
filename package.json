@@ -1,0 +1,16 @@
+{
+  "name": "riksdagen-bot",
+  "version": "0.0.0",
+  "repository": "https://github.com/Server-Departementet/Riksdagen-Bot.git",
+  "contributors": [
+    {
+      "name": "Vena Ström",
+      "url": "https://venastrom.se/",
+      "email": "strom.vena+riks@gmail.com"
+    }
+  ],
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "packageManager": "yarn@4.17.0+sha512.c2957de2f9025ab14d63b24d0d8be1f1655810e22c341042c27f7ecd017b180ec12db73d69ac366d71b304ef9f069349ce462de96f04f8f1da317f4f762c95ae"
+}
