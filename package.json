@@ -9,6 +9,9 @@
       "email": "strom.vena+riks@gmail.com"
     }
   ],
+  "scripts": {
+    "lint": "tsc --noEmit -p ./tsconfig.json && eslint -c ./eslint.config.ts --cache --concurrency auto"
+  },
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -19,7 +22,8 @@
     "eslint": "^10.6.0",
     "jiti": "^2.7.0",
     "prisma": "^7.8.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.0"
   },
   "dependencies": {
     "tsx": "^4.22.4"
