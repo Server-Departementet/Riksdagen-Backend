@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client"
+  moduleFormat = "esm"
+  output   = "../src/lib/prisma/generated"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model User {
+  id   String  @id // Discord ID
+  name String?
+}
+
+model Quote {
+  id               String   @id // Discord message ID
+  authorId         String
+  createdTimestamp BigInt // ms epoch
+  link             String
+  originalLink     String?
+
+  sender String
+  body   String @db.Text
+  quotee String
+
+  quoteeId    String?
+  context     String? @db.Text
+  attachments Json?
+
+  @@index([createdTimestamp])
+}

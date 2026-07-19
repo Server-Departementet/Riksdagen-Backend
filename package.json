@@ -17,7 +17,6 @@
   "type": "module",
   "packageManager": "yarn@4.17.0+sha512.c2957de2f9025ab14d63b24d0d8be1f1655810e22c341042c27f7ecd017b180ec12db73d69ac366d71b304ef9f069349ce462de96f04f8f1da317f4f762c95ae",
   "devDependencies": {
-    "@prisma/adapter-mariadb": "^7.8.0",
     "@types/node": "^26.0.1",
     "eslint": "^10.6.0",
     "jiti": "^2.7.0",
@@ -26,6 +25,11 @@
     "typescript-eslint": "^8.62.0"
   },
   "dependencies": {
+    "@prisma/adapter-mariadb": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@prisma/client-runtime-utils": "^7.8.0",
+    "discord.js": "^14.26.4",
+    "dotenv": "^17.4.2",
     "tsx": "^4.22.4"
   }
 }

@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 .vercel
 .vscode
@@ -42,3 +43,16 @@ yarn-error.log*
 next-env.d.ts
 
 .claude/
+
+# prisma generated client
+/src/lib/prisma/generated
+
+# operator-provided data
+/user-aliases.json
+
+# generated / runtime data
+/src/quotes/cache
+/src/quotes/out
+/src/quotes/stats
+/src/quotes/quotes_used.json
+/src/quiz/cache

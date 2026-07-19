@@ -1,0 +1,2 @@
+18 2    * * *   /root/Riksdagen-Bot/systemd/tsx.sh src/quotes/quotes.ts --fetch >> /var/log/riksdagen-bot/quotes.log 2>&1
+0 18    * * *   /root/Riksdagen-Bot/systemd/tsx.sh src/quiz/quiz.ts >> /var/log/riksdagen-bot/quiz.log 2>&1
