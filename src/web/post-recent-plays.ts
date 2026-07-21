@@ -4,7 +4,6 @@ import type { Prisma } from "@/lib/prisma-web/generated/client";
 import { PrismaClient } from "@/lib/prisma-web/generated/client";
 import { makeMariaDBAdapter } from "@/lib/prisma";
 import { refreshSpotifyAccessToken } from "./spotify-auth";
-import type SpotifyApi from "spotify-web-api-node";
 import type { UsersRecentlyPlayedTracksResponse } from "./types";
 
 if (!process.env.WEB_DATABASE_URL) throw new Error("WEB_DATABASE_URL is not set in environment variables");
@@ -70,10 +69,26 @@ async function addRecentTrackPlays() {
         .filter((artist) => !existingArtistIds.find((a) => a.id === artist.id));
       console.info(`Missing artists to fetch: ${missingArtistsSimple.length}.`);
       const artists = await getSpotifyArtists(missingArtistsSimple, spotifyToken);
-      const genres = artists.flatMap((artist) => artist.genres);
+      const genres = artists.flatMap((artist) => artist.genres ?? []);
       const albums = recentlyPlayedTracks.items.map((item) => item.track.album);
-      const tracks = recentlyPlayedTracks.items.map((item) => item.track);
+      const tracks = [...new Map(recentlyPlayedTracks.items.map((item) => [item.track.id, item.track])).values()];
       console.info(`Prepared ${artists.length} artists, ${albums.length} albums, ${tracks.length} tracks, ${genres.length} genres.`);
+
+      // Recently-played track objects no longer include external_ids, so ISRCs
+      // for tracks new to the database are resolved via the single-track endpoint
+      const existingTrackIds = new Set(
+        (await prisma.track.findMany({
+          where: { id: { in: tracks.map((track) => track.id) } },
+          select: { id: true },
+        })).map((track) => track.id),
+      );
+      const isrcByTrackId: Record<string, string> = {};
+      for (const track of tracks) {
+        if (existingTrackIds.has(track.id)) continue;
+        const isrc = track.external_ids?.isrc ?? await getTrackISRC(track.id, spotifyToken);
+        if (isrc) isrcByTrackId[track.id] = isrc;
+        else console.warn(`No ISRC found for track ${track.name} (${track.id}). Skipping.`);
+      }
 
       // Colors
       const colors: Record<string, string> = {};
@@ -128,9 +143,19 @@ async function addRecentTrackPlays() {
 
         // Upsert tracks
         for (const track of tracks) {
-          const ISRC = track.external_ids.isrc;
+          const ISRC = isrcByTrackId[track.id];
           if (!ISRC) {
-            console.warn(`No ISRC found for track ${track.name} (${track.id}). Skipping.`);
+            if (!existingTrackIds.has(track.id)) continue; // No ISRC resolvable, warned above
+            // Known track: refresh metadata, keep the stored ISRC
+            await prisma.track.update({
+              where: { id: track.id },
+              data: {
+                name: track.name,
+                url: track.external_urls.spotify,
+                duration: track.duration_ms,
+                albumId: track.album.id,
+              },
+            });
             continue;
           }
 
@@ -165,7 +190,7 @@ async function addRecentTrackPlays() {
               image: imageUrl,
               color: imageUrl ? colors[imageUrl] : undefined,
               genres: {
-                connect: artist.genres.map((genre) => ({ name: genre })),
+                connect: (artist.genres ?? []).map((genre) => ({ name: genre })),
               },
               tracks: {
                 connect: tracks
@@ -180,7 +205,7 @@ async function addRecentTrackPlays() {
               image: imageUrl,
               color: imageUrl ? colors[imageUrl] : undefined,
               genres: {
-                connect: artist.genres.map((genre) => ({ name: genre })),
+                connect: (artist.genres ?? []).map((genre) => ({ name: genre })),
               },
               tracks: {
                 connect: tracks
@@ -201,15 +226,17 @@ async function addRecentTrackPlays() {
           }
         }
 
-        // Insert TrackPlays, skip dupes
+        // Insert TrackPlays, skip dupes. Plays for tracks that could not be
+        // created (no ISRC) are dropped — they would violate the FK
         await prisma.trackPlay.createMany({
           skipDuplicates: true,
-          data: recentlyPlayedTracks.items.map((item) => ({
-
-            playedAt: new Date(item.played_at),
-            userId: dbUser.id,
-            trackId: item.track.id,
-          })) satisfies Prisma.TrackPlayCreateManyInput[],
+          data: recentlyPlayedTracks.items
+            .filter((item) => existingTrackIds.has(item.track.id) || isrcByTrackId[item.track.id])
+            .map((item) => ({
+              playedAt: new Date(item.played_at),
+              userId: dbUser.id,
+              trackId: item.track.id,
+            })) satisfies Prisma.TrackPlayCreateManyInput[],
         });
         console.info(`Inserted ${recentlyPlayedTracks.items.length} track plays (duplicates skipped).`);
       })
@@ -225,16 +252,42 @@ async function addRecentTrackPlays() {
   return;
 }
 
-async function getSpotifyArtists(artistsSimple: SpotifyApi.ArtistObjectSimplified[], token: string): Promise<SpotifyApi.ArtistObjectFull[]> {
-  const artistDetails: SpotifyApi.ArtistObjectFull[] = [];
-
-  for (const artist of artistsSimple) {
-    const response = await fetch(artist.href, {
+/** GET with one retry after Spotify's Retry-After on 429 */
+async function fetchWithRetry(url: string, token: string): Promise<Response> {
+  let response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (response.status === 429) {
+    const retryAfter = Math.min(Number(response.headers.get("Retry-After") ?? 1), 30);
+    await new Promise((resolve) => setTimeout(resolve, (retryAfter + 1) * 1000));
+    response = await fetch(url, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
       },
     });
+  }
+  return response;
+}
+
+async function getTrackISRC(trackId: string, token: string): Promise<string | null> {
+  const response = await fetchWithRetry(`https://api.spotify.com/v1/tracks/${trackId}`, token);
+  if (!response.ok) {
+    console.error(`Error fetching track ${trackId}: Status ${response.status} Response: ${await response.text()}`);
+    return null;
+  }
+  const data = await response.json() as SpotifyApi.SingleTrackResponse;
+  return data.external_ids?.isrc ?? null;
+}
+
+async function getSpotifyArtists(artistsSimple: SpotifyApi.ArtistObjectSimplified[], token: string): Promise<SpotifyApi.ArtistObjectFull[]> {
+  const artistDetails: SpotifyApi.ArtistObjectFull[] = [];
+
+  for (const artist of artistsSimple) {
+    const response = await fetchWithRetry(artist.href, token);
 
     if (!response.ok) {
       console.error(`Error fetching artist details for ${artist.name}: Status ${response.status}`);
