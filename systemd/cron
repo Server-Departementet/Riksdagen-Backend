@@ -1,2 +1,5 @@
-18 2    * * *   /root/Riksdagen-Bot/systemd/tsx.sh src/quotes/quotes.ts --fetch >> /var/log/riksdagen-bot/quotes.log 2>&1
-0 18    * * *   /root/Riksdagen-Bot/systemd/tsx.sh src/quiz/quiz.ts >> /var/log/riksdagen-bot/quiz.log 2>&1
+*/15 *  * * *   /root/Riksdagen-Backend/systemd/tsx.sh src/web/post-recent-plays.ts >> /var/log/riksdagen-backend/recent-plays.log 2>&1
+18 2    * * *   /root/Riksdagen-Backend/systemd/tsx.sh src/quotes/quotes.ts --fetch >> /var/log/riksdagen-backend/quotes.log 2>&1
+0 18    * * *   /root/Riksdagen-Backend/systemd/tsx.sh src/quiz/quiz.ts >> /var/log/riksdagen-backend/quiz.log 2>&1
+7 3     * * *   /root/Riksdagen-Backend/systemd/tsx.sh src/make-users.ts >> /var/log/riksdagen-backend/make-users.log 2>&1
+25 4    * * 1   /sbin/reboot

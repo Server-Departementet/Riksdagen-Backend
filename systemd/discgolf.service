@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 User=root
-WorkingDirectory=/root/Riksdagen-Bot/
+WorkingDirectory=/root/Riksdagen-Backend/
 ExecStart=/bin/bash -c "source /root/.nvm/nvm.sh && chmod +x systemd/* && systemd/discgolf.sh"
 Restart=always
 RestartSec=5

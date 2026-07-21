@@ -56,3 +56,4 @@ next-env.d.ts
 /src/quotes/stats
 /src/quotes/quotes_used.json
 /src/quiz/cache
+/src/lib/prisma-web/generated
