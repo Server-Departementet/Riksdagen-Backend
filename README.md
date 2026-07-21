@@ -46,7 +46,11 @@ It also runs against the **web app's database** (`WEB_DATABASE_URL`):
 | `yarn tsx src/discgolf/discgolf.ts` | Run the discgolf bot |
 | `yarn lint` | Type-check + ESLint |
 
-Deployment uses `systemd/` (a `discgolf` service + `cron` for quotes/quiz/recent-plays/make-users).
+The quotes crawler downloads attachment images into `public/quote-attachments/`;
+`systemd/assets.service` (src/assets/server.ts, port `ASSETS_PORT`, default 3100) serves
+them to the web app, which relays `/quote-attachments/*` misses here via a Next rewrite.
+
+Deployment uses `systemd/` (a `discgolf` + `assets` service + `cron` for quotes/quiz/recent-plays/make-users).
 Everything runs as the unprivileged `riks` user with the repo at `/home/riks/Riksdagen-Backend`
 (nvm + node installed for that user); only the maintenance reboot (`systemd/cron.root`) is root's.
 Cron logs go to `/var/log/riksdagen-backend/` — create that directory owned by `riks`.

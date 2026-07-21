@@ -25,7 +25,9 @@ runuser -u riks -- bash -c '
 crontab -u riks "$REPO/systemd/cron"
 crontab "$REPO/systemd/cron.root"
 cp "$REPO/systemd/discgolf.service" /etc/systemd/system/
+cp "$REPO/systemd/assets.service" /etc/systemd/system/
 systemctl daemon-reload
 
-# Restart discgolf only if it is currently running
+# Restart services only if they are currently running
 systemctl try-restart discgolf.service
+systemctl try-restart assets.service
