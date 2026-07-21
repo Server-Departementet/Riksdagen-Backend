@@ -47,4 +47,9 @@ It also runs against the **web app's database** (`WEB_DATABASE_URL`):
 | `yarn lint` | Type-check + ESLint |
 
 Deployment uses `systemd/` (a `discgolf` service + `cron` for quotes/quiz/recent-plays/make-users).
-Cron logs go to `/var/log/riksdagen-backend/` — create that directory on the server.
+Everything runs as the unprivileged `riks` user with the repo at `/home/riks/Riksdagen-Backend`
+(nvm + node installed for that user); only the maintenance reboot (`systemd/cron.root`) is root's.
+Cron logs go to `/var/log/riksdagen-backend/` — create that directory owned by `riks`.
+To update the server: `bash /home/riks/Riksdagen-Backend/systemd/update.sh` as root (pulls main,
+reinstalls deps, regenerates Prisma clients, refreshes crontabs + service, restarts discgolf
+if running).
