@@ -4,6 +4,7 @@ import type { Prisma } from "@/lib/prisma-web/generated/client";
 import { PrismaClient } from "@/lib/prisma-web/generated/client";
 import { makeMariaDBAdapter } from "@/lib/prisma";
 import { refreshSpotifyAccessToken } from "./spotify-auth";
+import type SpotifyApi from "spotify-web-api-node";
 import type { UsersRecentlyPlayedTracksResponse } from "./types";
 
 if (!process.env.WEB_DATABASE_URL) throw new Error("WEB_DATABASE_URL is not set in environment variables");
