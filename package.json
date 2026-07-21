@@ -10,7 +10,9 @@
     }
   ],
   "scripts": {
-    "lint": "tsc --noEmit -p ./tsconfig.json && eslint -c ./eslint.config.ts --cache --concurrency auto"
+    "lint": "tsc --noEmit -p ./tsconfig.json && eslint -c ./eslint.config.ts --cache --concurrency auto",
+    "discgolf-test": "tsx --test src/discgolf/courses.test.ts",
+    "quotes-test": "tsx --test src/quotes/quote-utils.test.ts"
   },
   "license": "MIT",
   "private": true,

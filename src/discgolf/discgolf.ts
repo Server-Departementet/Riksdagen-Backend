@@ -1,6 +1,9 @@
 import "dotenv/config";
+import path from "node:path";
 import type { ChatInputCommandInteraction, Message } from "discord.js";
 import { Client as DiscordClient, Events, GatewayIntentBits, MessageFlags, REST, Routes, SlashCommandBuilder } from "discord.js";
+import type { Course } from "./courses";
+import { buildScoreTable, findCourse, formatRelative, loadCourses, relativeToPar } from "./courses";
 
 const COURSE_NAME_MIN_LENGTH = 3;
 const COURSE_NAME_MAX_LENGTH = 30;
@@ -27,6 +30,9 @@ function logError(message: string, error?: unknown, data?: Record<string, unknow
 }
 
 logInfo("Starting Discord Discgolf Bot");
+
+const courses = loadCourses(path.join(import.meta.dirname, "courses"));
+logInfo("Loaded courses", { count: courses.length, names: courses.map((course) => course.name) });
 
 if (!process.env.DISCORD_BOT_TOKEN) throw new Error("DISCORD_BOT_TOKEN is not set in environment variables");
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -177,23 +183,20 @@ async function räkna(interaction: ChatInputCommandInteraction) {
     interactionId: interaction.id,
   });
 
-  logInfo("Running 'alla' flow (aggregated)", { interactionId: interaction.id });
+  const course = findCourse(courses, courseMessage.content);
+  if (!course) {
+    logWarn("No course file matches course message, pars will be unavailable", { course: courseMessage.content, interactionId: interaction.id });
+  }
+
   const guild = interaction.guild ?? await discordClient.guilds.fetch(DISCGOLF_GUILD_ID);
   await guild.members.fetch();
   const fancyDate = new Date(courseMessage.createdTimestamp).toLocaleString("sv-SE", { timeZone: "Europe/Stockholm", dateStyle: "long" });
-  const results: { memberId: string; points: number }[] = [];
-  const holeTotals: Record<string, { sum: number; count: number }> = {};
+  const results: { memberId: string; points: number; score: Record<string, number> }[] = [];
   for (const member of guild.members.cache.values()) {
     if (member.user.bot) continue;
     const { points, score } = getUserScore(member.id, allMessages.toJSON(), courseMessage);
     if (points === 0) continue;
-    results.push({ memberId: member.id, points });
-    for (const [hole, holePoints] of Object.entries(score)) {
-      const total = holeTotals[hole] ?? { sum: 0, count: 0 };
-      total.sum += holePoints;
-      total.count += 1;
-      holeTotals[hole] = total;
-    }
+    results.push({ memberId: member.id, points, score });
   }
 
   if (results.length === 0) {
@@ -201,55 +204,32 @@ async function räkna(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  // Lowest score first (best in disc golf)
   results.sort((a, b) => a.points - b.points);
-  const lines = results.map(({ memberId, points }) => `<@${memberId}> - totalt ${points}`);
-
-  const table = buildHoleAverageTable(holeTotals);
-  const out = `-# ${fancyDate}\n${courseMessage.content}\n${lines.join("\n")}\n${table}`;
+  const lines = results.map(({ memberId, points, score }) =>
+    `<@${memberId}> - totalt ${points}${formatRelativeSuffix(course, score)}`,
+  );
+  const table = buildScoreTable(course, results.map((result) => result.score));
+  const out = `-# ${fancyDate}\n${courseMessage.content}\n${lines.join("\n")}\n\`\`\`\n${table}\n\`\`\``;
   if (!("send" in writeChannel)) {
-    logError("Write channel not text-based during 'alla' run", undefined, { channelId: writeChannel.id, interactionId: interaction.id });
+    logError("Write channel is not text-based", undefined, { channelId: writeChannel.id, interactionId: interaction.id });
     await interaction.reply({ content: "Write channel is not text-based.", flags: MessageFlags.Ephemeral });
     return;
   }
   const sent = await writeChannel.send(out);
-  logInfo("Sent aggregated score message (alla)", { messageId: sent.id, channelId: writeChannel.id, interactionId: interaction.id });
+  logInfo("Sent aggregated score message", { messageId: sent.id, channelId: writeChannel.id, interactionId: interaction.id });
   await interaction.reply({ content: `Skickade ett meddelande med ${lines.length} resultat.`, flags: MessageFlags.Ephemeral });
 }
 
-function buildHoleAverageTable(holeTotals: Record<string, { sum: number; count: number }>): string {
-  const holeHeader = "Hål";
-  const avgHeader = "Snitt";
-  const rows = Object.entries(holeTotals)
-    .sort(([a], [b]) => Number(a) - Number(b))
-    .map(([hole, { sum, count }]) => ({ hole, avg: (sum / count).toFixed(1) }));
-
-  const holeWidth = Math.max(holeHeader.length, ...rows.map((r) => r.hole.length));
-  const avgWidth = Math.max(avgHeader.length, ...rows.map((r) => r.avg.length));
-
-  const headerLine = `${holeHeader.padEnd(holeWidth)}  ${avgHeader.padStart(avgWidth)}`;
-  const separator = "-".repeat(headerLine.length);
-  const bodyLines = rows.map((r) => `${r.hole.padEnd(holeWidth)}  ${r.avg.padStart(avgWidth)}`);
-
-  return ["```", headerLine, separator, ...bodyLines, "```"].join("\n");
-}
-
 function isCourseMessage(content: string): boolean {
-  const trimmed = content.trim();
-
-  const lengthOk = trimmed.length >= COURSE_NAME_MIN_LENGTH
-    && trimmed.length <= COURSE_NAME_MAX_LENGTH;
-  if (!lengthOk) return false;
-
-  // Only letters, digits and spaces allowed (e.g. "Domarringen Svart Slinga")
-  const allowedChars = /^[a-zA-ZåäöÅÄÖ0-9 -_]+$/.test(trimmed);
-  if (!allowedChars) return false;
-
-  // Must be mostly text: more letters than digits (rejects pure-number score lines)
-  const letterCount = (trimmed.match(/[a-zA-ZåäöÅÄÖ]/g) ?? []).length;
-  const digitCount = (trimmed.match(/[0-9]/g) ?? []).length;
-  return letterCount > digitCount;
+  if (findCourse(courses, content)) return true;
+  const isOnlyString = /^[a-zA-ZåäöÅÄÖ]+$/.test(content);
+  const lengthOk = content.length >= COURSE_NAME_MIN_LENGTH
+    && content.length <= COURSE_NAME_MAX_LENGTH;
+  return isOnlyString && lengthOk;
 }
+
+// "<hole id> <score>" where the hole id is a number optionally prefixed by letters, e.g. "5 11" or "X1 3"
+const scoreLineRegex = /^([a-zA-ZåäöÅÄÖ]*\d+)\s+(\d+)$/;
 
 function getUserScore(userId: string, messages: Message[], courseMessage: Message): {
   points: number;
@@ -262,29 +242,28 @@ function getUserScore(userId: string, messages: Message[], courseMessage: Messag
     if (message.createdTimestamp <= courseMessage.createdTimestamp) continue;
     if (isCourseMessage(message.content)) continue;
 
-    const nonNumberRegex = /[^0-9\s]/;
-    if (nonNumberRegex.test(message.content)) continue;
+    for (const line of message.content.split("\n")) {
+      const match = scoreLineRegex.exec(line.trim());
+      const [, hole, pointString] = match ?? [];
+      if (!hole || !pointString) continue;
 
-    const asNumber = Number(message.content.trim());
-    if (!isNaN(asNumber) && asNumber > SINGLE_HOLE_MAX_SCORE) continue;
+      const parsedPoint = parseInt(pointString, 10);
+      if (parsedPoint > SINGLE_HOLE_MAX_SCORE) {
+        logWarn("Skipping score line (score above max)", { messageId: message.id, hole, parsedPoint });
+        continue;
+      }
 
-    const [course, point] = message.content.split(" ").map(s => s.trim());
-    if (!course || !point) {
-      logWarn("Skipping message (could not split into course and point)", { messageId: message.id, content: message.content });
-      continue;
+      score[hole] = parsedPoint;
+      logInfo("Parsed score line", { messageId: message.id, hole, parsedPoint });
     }
-
-    const parsedPoint = parseInt(point, 10);
-    if (isNaN(parsedPoint)) {
-      logWarn("Skipping message (point not a number)", { messageId: message.id, pointStr: point });
-      continue;
-    }
-
-    score[course] = parsedPoint;
-    logInfo("Parsed score line", { messageId: message.id, course, parsedPoint });
   }
 
   const points = Object.values(score).reduce((a, b) => a + b, 0);
   logInfo("Finished calculating user score", { userId, totalPoints: points, entries: score });
   return { points, score };
+}
+
+function formatRelativeSuffix(course: Course | undefined, score: Record<string, number>): string {
+  if (!course) return "";
+  return ` (${formatRelative(relativeToPar(course, score))})`;
 }
