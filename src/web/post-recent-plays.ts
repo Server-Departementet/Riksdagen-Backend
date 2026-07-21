@@ -195,6 +195,7 @@ async function addRecentTrackPlays() {
               },
               tracks: {
                 connect: tracks
+                  .filter((track) => existingTrackIds.has(track.id) || isrcByTrackId[track.id])
                   .filter((track) => track.artists.some((a) => a.id === artist.id))
                   .map((track) => ({ id: track.id })),
               },
@@ -210,6 +211,7 @@ async function addRecentTrackPlays() {
               },
               tracks: {
                 connect: tracks
+                  .filter((track) => existingTrackIds.has(track.id) || isrcByTrackId[track.id])
                   .filter((track) => track.artists.some((a) => a.id === artist.id))
                   .map((track) => ({ id: track.id })),
               },
@@ -218,8 +220,16 @@ async function addRecentTrackPlays() {
         }
 
         // Really ensure Track-Artist relations
+        const knownArtistIds = new Set([
+          ...existingArtistIds.map((a) => a.id),
+          ...artists.map((a) => a.id),
+        ]);
         for (const track of tracks) {
+          // Skip tracks that are not in the database (no ISRC resolvable)
+          if (!existingTrackIds.has(track.id) && !isrcByTrackId[track.id]) continue;
           for (const artist of track.artists) {
+            // Skip artists that are not in the database (fetch failed)
+            if (!knownArtistIds.has(artist.id)) continue;
             await prisma.track.update({
               where: { id: track.id },
               data: { artists: { connect: { id: artist.id } } },
