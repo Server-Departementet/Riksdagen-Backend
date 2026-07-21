@@ -1,1 +1,1 @@
-- [ ] set up web server for relaying image attachments
+- [x] set up web server for relaying image attachments
