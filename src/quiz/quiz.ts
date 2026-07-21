@@ -90,7 +90,7 @@ async function main() {
   const latestMessages = await channel.messages.fetch({ limit: 100 });
   const lastQuiz = latestMessages
     .find((msg) =>
-      msg.author.id === discordClient.user?.id
+      msg.author.bot // The channel history includes quizzes from the previous bot application
       && msg.type === MessageType.Default
       && msg.poll
       && msg.content.toLowerCase().startsWith("# citat quiz #"),
@@ -169,7 +169,7 @@ async function main() {
       // Look for previous scoreboard messages to seed scores, then add newer results.
       const scoreboardMessages = latestMessages
         .filter((msg) =>
-          msg.author.id === discordClient.user?.id
+          msg.author.bot // The channel history includes quizzes from the previous bot application
           && msg.type === MessageType.Default
           && msg.content.toLowerCase().startsWith("# citat quiz scoreboard #0-"),
         );
@@ -207,7 +207,7 @@ async function main() {
       const collectQuizResults = (messages: typeof latestMessages) => {
         messages.forEach(msg => {
           if (
-            msg.author.id === discordClient.user?.id
+            msg.author.bot // The channel history includes quizzes from the previous bot application
             && msg.type === MessageType.Default
             && msg.content.toLowerCase().startsWith("## citat quiz #")
             && (msg.content.split("\n")[0]?.toLowerCase()?.endsWith(" resultat") ?? false)
@@ -460,7 +460,7 @@ function endPreviousPoll(pollMessage: Message, channel: Channel): Promise<void> 
           }
           const pollResultMessages = (await channel.messages.fetch({ limit: 20 }))
             .filter(msg =>
-              msg.author.id === discordClient.user?.id
+              msg.author.bot // The channel history includes quizzes from the previous bot application
               && msg.type === MessageType.PollResult,
             );
           const foundCount = pollResultMessages.size;
